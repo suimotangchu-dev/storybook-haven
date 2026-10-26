@@ -3,13 +3,21 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Storybook library, private administration, authentication, and storage API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: Auth
+    description: Browser authentication endpoints
+  - name: Books
+    description: Public storybook library and embedded reader assets
+  - name: Admin
+    description: Private book management
+  - name: Storage
+    description: Protected object storage uploads
 paths:
   /healthz:
     get:
@@ -24,13 +32,442 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the current user
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+      responses:
+        "200":
+          description: Authentication state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUserEnvelope"
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start browser login
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "302": { description: Redirect to the login provider }
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete browser login
+      parameters:
+        - { name: code, in: query, required: false, schema: { type: string } }
+        - { name: state, in: query, required: false, schema: { type: string } }
+        - { name: iss, in: query, required: false, schema: { type: string, format: uri } }
+      responses:
+        "302": { description: Redirect after login }
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear browser session
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+        - $ref: "#/components/parameters/SessionCookie"
+        - { name: returnTo, in: query, required: false, schema: { type: string, default: / } }
+      responses:
+        "302": { description: Redirect after logout }
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange mobile OIDC code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/MobileTokenExchangeRequest" }
+      responses:
+        "200":
+          description: Session created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/MobileTokenExchangeSuccess" }
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401":
+          description: Invalid token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "500":
+          description: Token exchange failed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete mobile session
+      parameters:
+        - $ref: "#/components/parameters/AuthorizationSessionHeader"
+      responses:
+        "200":
+          description: Logout processed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LogoutSuccess" }
+  /books:
+    get:
+      tags: [Books]
+      operationId: listBooks
+      summary: Search published storybooks
+      parameters:
+        - { name: search, in: query, required: false, schema: { type: string } }
+        - { name: category, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Published storybooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Book" }
+  /books/categories:
+    get:
+      tags: [Books]
+      operationId: listBookCategories
+      summary: List book categories and counts
+      responses:
+        "200":
+          description: Published categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/BookCategory" }
+  /books/{bookId}:
+    get:
+      tags: [Books]
+      operationId: getBook
+      summary: Get published storybook details
+      parameters:
+        - { name: bookId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Storybook details
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Book" }
+        "404":
+          description: Storybook not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /books/{bookId}/reader/{assetPath}:
+    get:
+      tags: [Books]
+      operationId: getBookReaderAsset
+      summary: Serve an asset from a published storybook
+      description: assetPath is a relative path within the imported package
+      parameters:
+        - { name: bookId, in: path, required: true, schema: { type: string } }
+        - { name: assetPath, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Storybook HTML, script, image, audio, video, or other asset
+          content:
+            "*/*":
+              schema: { type: string, format: binary }
+        "404":
+          description: Asset not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /admin/summary:
+    get:
+      tags: [Admin]
+      operationId: getAdminSummary
+      summary: Get library management counts
+      responses:
+        "200":
+          description: Storybook counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AdminSummary" }
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "403":
+          description: Administrator access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /admin/books:
+    get:
+      tags: [Admin]
+      operationId: listAdminBooks
+      summary: List all managed books
+      responses:
+        "200":
+          description: All books
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Book" }
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "403":
+          description: Administrator access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /admin/books/import:
+    post:
+      tags: [Admin]
+      operationId: importBook
+      summary: Validate and import a ZIP storybook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookImportInput" }
+      responses:
+        "201":
+          description: Imported as a draft
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Book" }
+        "400":
+          description: Invalid metadata or ZIP package
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "401":
+          description: Sign-in required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+        "403":
+          description: Administrator access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /admin/books/{bookId}:
+    patch:
+      tags: [Admin]
+      operationId: updateBook
+      summary: Edit book details or publication state
+      parameters:
+        - { name: bookId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/BookUpdate" }
+      responses:
+        "200":
+          description: Updated storybook
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Book" }
+        "404":
+          description: Storybook not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+    delete:
+      tags: [Admin]
+      operationId: deleteBook
+      summary: Remove a storybook from the library
+      parameters:
+        - { name: bookId, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Storybook removed }
+        "404":
+          description: Storybook not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
+  /storage/uploads/request-url:
+    post:
+      tags: [Storage]
+      operationId: requestUploadUrl
+      summary: Request a presigned ZIP upload URL
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadUrlRequest" }
+      responses:
+        "200":
+          description: Presigned upload URL generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UploadUrlResponse" }
+        "400":
+          description: Invalid upload metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ErrorEnvelope" }
 components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema: { type: string }
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema: { type: string }
   schemas:
     HealthStatus:
       type: object
       properties:
-        status:
-          type: string
-      required:
-        - status
+        status: { type: string }
+      required: [status]
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id: { type: string }
+        email: { type: [string, "null"], format: email }
+        firstName: { type: [string, "null"] }
+        lastName: { type: [string, "null"] }
+        profileImageUrl: { type: [string, "null"] }
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - { $ref: "#/components/schemas/AuthUser" }
+            - { type: "null" }
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code: { type: string, minLength: 1 }
+        code_verifier: { type: string, minLength: 1 }
+        redirect_uri: { type: string, minLength: 1, format: uri }
+        state: { type: string, minLength: 1 }
+        nonce: { type: string, minLength: 1 }
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token: { type: string }
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success: { type: boolean, const: true }
+    BookPage:
+      type: object
+      required: [title, text]
+      properties:
+        title: { type: string }
+        text: { type: string }
+        imageAlt: { type: [string, "null"] }
+    Book:
+      type: object
+      required: [id, title, author, description, categories, minAge, maxAge, readingMinutes, readerType, published, coverStyle, coverUrl, samplePages, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        title: { type: string }
+        author: { type: string }
+        description: { type: string }
+        categories:
+          type: array
+          items: { type: string }
+        minAge: { type: integer }
+        maxAge: { type: integer }
+        readingMinutes: { type: integer }
+        readerType: { type: string, enum: [sample, html5] }
+        published: { type: boolean }
+        coverStyle: { type: string }
+        coverUrl: { type: [string, "null"] }
+        samplePages:
+          type: [array, "null"]
+          items: { $ref: "#/components/schemas/BookPage" }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BookCategory:
+      type: object
+      required: [name, count]
+      properties:
+        name: { type: string }
+        count: { type: integer }
+    AdminSummary:
+      type: object
+      required: [totalBooks, publishedBooks, draftBooks, categories]
+      properties:
+        totalBooks: { type: integer }
+        publishedBooks: { type: integer }
+        draftBooks: { type: integer }
+        categories: { type: integer }
+    BookImportInput:
+      type: object
+      required: [title, author, description, categories, minAge, maxAge, readingMinutes, archiveObjectPath]
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        author: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        categories:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 40 }
+        minAge: { type: integer, minimum: 0, maximum: 18 }
+        maxAge: { type: integer, minimum: 0, maximum: 18 }
+        readingMinutes: { type: integer, minimum: 1, maximum: 240 }
+        archiveObjectPath: { type: string, minLength: 1 }
+    BookUpdate:
+      type: object
+      properties:
+        title: { type: string, minLength: 1, maxLength: 120 }
+        author: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        categories:
+          type: array
+          minItems: 1
+          items: { type: string, minLength: 1, maxLength: 40 }
+        minAge: { type: integer, minimum: 0, maximum: 18 }
+        maxAge: { type: integer, minimum: 0, maximum: 18 }
+        readingMinutes: { type: integer, minimum: 1, maximum: 240 }
+        published: { type: boolean }
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name: { type: string, minLength: 1 }
+        size: { type: integer, minimum: 1 }
+        contentType: { type: string, minLength: 1 }
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL: { type: string, format: uri }
+        objectPath: { type: string }
+        metadata: { $ref: "#/components/schemas/UploadUrlRequest" }
 

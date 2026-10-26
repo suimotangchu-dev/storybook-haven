@@ -1,6 +1,6 @@
-# [Project name]
+# Little Lantern Storybook Library
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A family-friendly storybook library for children, teens, and parents, with a searchable catalog, an in-site reader, and a private book-upload dashboard.
 
 ## Run & Operate
 
@@ -22,23 +22,35 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/storybook-library/` — responsive library, book details, reader, and administrator dashboard
+- `artifacts/api-server/src/routes/books.ts` — public catalog, reader assets, and administrator book actions
+- `artifacts/api-server/src/lib/bookArchive.ts` — ZIP validation and private asset storage
+- `artifacts/api-server/src/routes/auth.ts` and `middlewares/requireAdmin.ts` — sign-in and administrator access checks
+- `lib/db/src/schema/storybook-books.ts` — storybook metadata and package manifest
+- `lib/api-spec/openapi.yaml` — source of truth for generated client and validation schemas
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The public catalog and readers do not require sign-in; all administration and upload actions are restricted server-side to the configured admin email.
+- ZIP uploads are expanded into private object storage. Only published books can serve reader assets, through same-site routes and a sandboxed iframe.
+- Sample stories and uploaded HTML5 stories share one book record model, leaving room for a future visual editor without changing the public catalog.
+- ZIP imports require a top-level `index.html` and enforce archive, extracted-size, file-count, and path-safety limits.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Browse sample storybooks by category, age range, and search.
+- Read sample stories with page controls or open uploaded HTML5 books in a full-screen reader.
+- Sign in to a private dashboard to import ZIP books, publish or unpublish them, and remove books.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Keep the experience warm, imaginative, uncluttered, responsive, and easy for children to navigate. Avoid distracting animation.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Set `ADMIN_EMAIL` to the verified sign-in email that should administer the library.
+- Push development schema changes with `pnpm --filter @workspace/db run push`.
+- Uploaded ZIPs must include `index.html` at the archive root; ZIPs are limited to 50 MB and unpacked packages to 120 MB.
 
 ## Pointers
 

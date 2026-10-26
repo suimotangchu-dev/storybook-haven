@@ -18,3 +18,11 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[userenv]
+
+[userenv.shared]
+ADMIN_EMAIL = "suimotangchu@gmail.com"
+
+[nix]
+channel = "stable-25_05"

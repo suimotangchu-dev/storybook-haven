@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Storybook Library"
+description = "A warm, responsive storybook library for families, with searchable books, a full-screen HTML5 reader, and a private administrator area for publishing books."
+version = "1.0.0"
+id = "artifacts/storybook-library"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 26088
+
+[services.development]
+run = "pnpm --filter @workspace/storybook-library run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/storybook-library", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/storybook-library/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26088"
+BASE_PATH = "/"
